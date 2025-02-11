@@ -6,7 +6,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    environment: main  
+    env:
+      GOOGLE_SEARCH_API_KEY: ${{ secrets.GOOGLE_SEARCH_API_KEY }}
+      SEARCH_ENGINE_ID: ${{ secrets.SEARCH_ENGINE_ID }}
+      MY_CLAUDE_KEY: ${{ secrets.MY_CLAUDE_KEY }}
+      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      
     steps:
       # Checkout repository
       - name: Checkout repository
@@ -40,3 +46,14 @@ jobs:
       # Run googleSearch.py
       - name: Run googleSearch.py
         run: python googleSearch.py
+      # Combine JSON files
+      - name: Combine JSON files
+        run: python combine_json.py
+      # Commit and push if there are changes
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add combined.json
+          git commit -m "Update combined.json" || exit 0
+          git push
