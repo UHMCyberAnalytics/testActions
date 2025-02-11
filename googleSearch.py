@@ -4,7 +4,7 @@ import os
 
 api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
 search_engine_id = os.getenv("SEARCH_ENGINE_ID")
-file_path = "combined.json"
+file_path = "google.json"
 
 if os.path.exists(file_path):
     with open(file_path, "r") as file:

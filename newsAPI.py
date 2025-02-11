@@ -6,7 +6,7 @@ import datetime
 news_api_key = os.getenv('NEWS_API_KEY')
 newsapi = NewsApiClient(api_key=news_api_key)
 
-file_path = "combined.json"
+file_path = "news.json"
 
 if os.path.exists(file_path):
     with open(file_path, "r") as file:
@@ -27,7 +27,7 @@ def fetch_and_save_news(queries, file_path=file_path):
 
     for query in queries:
         today = datetime.datetime.now(datetime.timezone.utc)
-        last_week = today - timedelta(days=7)  # Subtract 7 days
+        last_week = today - timedelta(days=7)
 
         from_date = last_week.strftime('%Y-%m-%d')
         to_date = today.strftime('%Y-%m-%d')
@@ -66,7 +66,7 @@ def fetch_and_save_news(queries, file_path=file_path):
             print(f"An error occurred while fetching news for '{query}': {e}")
 
 
-    with open(file_path, "w") as file:
+    with open(file_path, "w", encoding="utf-8") as file:
         json.dump(list(all_existing_urls), file, indent=4)
 
     print(f"News URLs for all queries saved to {file_path}")
