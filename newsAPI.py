@@ -72,5 +72,5 @@ def fetch_and_save_news(queries, file_path=file_path):
     print(f"News URLs for all queries saved to {file_path}")
 
 
-queries = ["Chinese cyber actors", "chinese hackers", "Chinese APT"]
+queries = ["Chinese cyber actors", "chinese hackers"]
 fetch_and_save_news(queries)
