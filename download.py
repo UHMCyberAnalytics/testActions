@@ -1,76 +1,50 @@
-import json
-import asyncio
-import requests
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
-from crawl4ai.async_dispatcher import SemaphoreDispatcher
+from anthropic import Anthropic
 import chromadb
 
-client = chromadb.PersistentClient(path=r"C:\Users\Ryder\Documents\GitHub\testActions\something")
-GITHUB_URL = "https://raw.githubusercontent.com/UHMCyberAnalytics/testActions/main/combined.json"
+class RAGWithClaude:
+    def __init__(self, api_key, chroma_path):
+        self.client = Anthropic(api_key=api_key)
+        self.chroma_client = chromadb.PersistentClient(path=chroma_path)
+        self.collection = self.chroma_client.get_or_create_collection(name="my_collection")
 
-def download_json(save_path="combined.json"):
-    try:
-        response = requests.get(GITHUB_URL)
-        response.raise_for_status()
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(response.json(), f)
-        print(f"Successfully downloaded and saved {save_path}")
-        return True
-    except Exception as e:
-        print(f"Error downloading JSON: {e}")
-        return False
-
-download_json()
-
-# Load the JSON data from the file
-with open("combined.json", "r", encoding="utf-8") as f:
-    json_data = json.load(f)
-
-# Extract the URLs from the JSON (assuming the links are in the list)
-urls = json_data  # Directly use the links list from the JSON
-
-# Create or get the collection from Chroma
-collection = client.get_or_create_collection(name="my_collection")
-
-# Create the dispatcher for concurrency control
-dispatcher = SemaphoreDispatcher(
-    max_session_permit=10,  # Maximum concurrent tasks
-)
-
-async def main(urls):
-    run_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-
-    # Dispatcher to control the number of concurrent tasks for web crawling
-    dispatcher2 = SemaphoreDispatcher(
-        semaphore_count=5,
-    )
-
-    documents = []  # Initialize an empty list for documents
-    ids = []  # Initialize an empty list for IDs
-
-    # Fetch the markdown content for all URLs
-    async with AsyncWebCrawler() as crawler:
-        results = await crawler.arun_many(
-            urls,
-            config=run_config,
-            dispatcher=dispatcher2
+    def query(self, user_question, n_results=5):
+        # Query Chroma with valid include parameters
+        results = self.collection.query(
+            query_texts=[user_question],
+            n_results=n_results,
+            include=['documents', 'metadatas']
         )
 
-    # Process each result in the list
-    for res in results:
-        if res.success:
-            # Assuming res.markdown contains the crawled document content
-            documents.append(res.markdown)
-            # Assuming res.urls contain the URL, which you want to use as the ID
-            ids.append(res.url)
-        else:
-            print("Failed:", res.url, "-", res.error_message)
+        context = "\n\n".join(results['documents'][0])
 
-    # Upsert documents into the Chroma collection
-    collection.upsert(
-        documents=documents,
-        ids=ids
-    )
+        message = self.client.messages.create(
+            model="claude-3-opus-20240229",
+            max_tokens=1000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Here is some relevant context:
+                    
+{context}
 
-if __name__ == "__main__":
-    asyncio.run(main(urls))
+Based on the context above, please answer this question: {user_question}
+
+If the context doesn't contain enough information to answer the question fully, 
+please say so and answer with what you know from the context only."""
+                }
+            ]
+        )
+
+        response_content = message.content
+        text_response = response_content[0].text if hasattr(response_content[0], 'text') else response_content
+        return text_response
+
+# Usage
+rag = RAGWithClaude(
+    api_key="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",
+    chroma_path=r"C:\Users\Ryder\Documents\GitHub\testActions\something"
+)
+
+response = rag.query("What is the most recent article you have access to?")
+print("\nClaude's Response:")
+print(response)

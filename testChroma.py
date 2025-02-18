@@ -1,46 +1,48 @@
-import anthropic
+from anthropic import Anthropic
 import chromadb
-import json
 
-# Chroma Client Setup
-client = chromadb.PersistentClient(path=r"C:\Users\Ryder\Documents\GitHub\testActions\something")
-collection = client.get_or_create_collection(name="my_collection")
+class RAGWithClaude:
+    def __init__(self, api_key, chroma_path):
+        self.client = Anthropic(api_key=api_key)
+        self.chroma_client = chromadb.PersistentClient(path=chroma_path)
+        self.collection = self.chroma_client.get_or_create_collection(name="my_collection")
 
-# Anthropic Client Setup
-anthropic_client = anthropic.Anthropic(
-    api_key="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"
+    def query(self, user_question, n_results=3):
+        results = self.collection.query(
+            query_texts=[user_question],
+            n_results=n_results
+        )
+
+        context = "\n\n".join(results['documents'][0])
+
+        prompt = f"""Here is some relevant context:
+        
+{context}
+
+Based on the context above, please answer this question: {user_question}
+
+If the context doesn't contain enough information to answer the question fully, 
+please say so and answer with what you know from the context only."""
+
+        message = self.client.messages.create(
+            model="claude-3-opus-20240229",
+            max_tokens=1000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+
+        return message.content
+
+# Usage
+rag = RAGWithClaude(
+    api_key="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",
+    chroma_path=r"C:\Users\Ryder\Documents\GitHub\testActions\something"
 )
 
-# Function to query Chroma and get relevant documents
-def query_chroma(query, collection):
-    results = collection.query(query_texts=[query], n_results=3)  # Get top 3 results
-    return results['documents']
-
-# Function to ask Claude using context from Chroma
-def ask_claude(query, documents):
-    # Ensure all documents are strings
-    context = '\n'.join([str(doc) for doc in documents])
-
-    # Generate answer using Claude
-    message = anthropic_client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=1024,
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"Context: {context}\n\nQuery: {query}"}
-        ]
-    )
-    return message['choices'][0]['message']['content']
-
-# Main process to query Chroma and ask Claude
-def main(query):
-    # Get the relevant documents from Chroma
-    relevant_documents = query_chroma(query, collection)
-
-    # Ask Claude with the context and query
-    response = ask_claude(query, relevant_documents)
-    print("Claude's response:", response)
-
-# Example query
-query = "Tell me about the properties of water."
-main(query)
+response = rag.query("What is the most recent articles you were trained on? What are their links", n_results=5)  # Get 5 documents
+print("\nClaude's Response:")
+print(response)
