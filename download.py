@@ -41,7 +41,7 @@ please say so and answer with what you know from the context only."""
 
 # Usage
 rag = RAGWithClaude(
-    api_key="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",
+    api_key="",
     chroma_path=r"C:\Users\Ryder\Documents\GitHub\testActions\something"
 )
 
