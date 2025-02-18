@@ -12,7 +12,7 @@ if os.path.exists(file_path):
 else:
     existing_urls = set()
 
-queries = ["Chinese cyber actors", "chinese hackers"]
+queries = ["chinese hackers"]
 def google_search(api_key, search_engine_id, query, **params):
     base_url = "https://www.googleapis.com/customsearch/v1"
     params = {

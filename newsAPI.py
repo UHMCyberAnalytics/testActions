@@ -8,6 +8,12 @@ newsapi = NewsApiClient(api_key=news_api_key)
 
 file_path = "news.json"
 
+today = datetime.datetime.now(datetime.timezone.utc)
+last_week = today - timedelta(days=7)
+
+from_date = last_week.strftime('%Y-%m-%d')
+to_date = today.strftime('%Y-%m-%d')
+
 if os.path.exists(file_path):
     with open(file_path, "r") as file:
         existing_urls = set(json.load(file))
@@ -26,20 +32,13 @@ def fetch_and_save_news(queries, file_path=file_path):
                 print(f"Warning: JSON decoding error in {file_path}. Starting with an empty URL set.")
 
     for query in queries:
-        today = datetime.datetime.now(datetime.timezone.utc)
-        last_week = today - timedelta(days=7)
-
-        from_date = last_week.strftime('%Y-%m-%d')
-        to_date = today.strftime('%Y-%m-%d')
-
         try:
             all_articles = newsapi.get_everything(
                 q=query,
                 language='en',
                 sort_by='relevancy',
                 from_param=from_date,
-                to=to_date,
-                page=1
+                to=to_date
             )
 
             if all_articles['status'] == 'ok':
@@ -72,5 +71,5 @@ def fetch_and_save_news(queries, file_path=file_path):
     print(f"News URLs for all queries saved to {file_path}")
 
 
-queries = ["Chinese cyber actors", "chinese hackers"]
+queries = ["chinese hackers"]
 fetch_and_save_news(queries)
