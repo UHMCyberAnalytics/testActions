@@ -1,50 +1,100 @@
-from anthropic import Anthropic
+import json
+import asyncio
+import requests
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
+from crawl4ai.async_dispatcher import SemaphoreDispatcher
+import os
 import chromadb
 
-class RAGWithClaude:
-    def __init__(self, api_key, chroma_path):
-        self.client = Anthropic(api_key=api_key)
-        self.chroma_client = chromadb.PersistentClient(path=chroma_path)
-        self.collection = self.chroma_client.get_or_create_collection(name="my_collection")
+client = chromadb.PersistentClient(path=r"C:\Users\Ryder\Documents\GitHub\testActions\something")
+GITHUB_URL = "https://raw.githubusercontent.com/UHMCyberAnalytics/testActions/main/combined.json"
 
-    def query(self, user_question, n_results=5):
-        # Query Chroma with valid include parameters
-        results = self.collection.query(
-            query_texts=[user_question],
-            n_results=n_results,
-            include=['documents', 'metadatas']
-        )
+def download_json(save_path="combined.json"):
+    try:
+        response = requests.get(GITHUB_URL)
+        response.raise_for_status()
+        with open(save_path, "w", encoding="utf-8") as f:
+            json.dump(response.json(), f)
+        print(f"Successfully downloaded and saved {save_path}")
+        return True
+    except Exception as e:
+        print(f"Error downloading JSON: {e}")
+        return False
 
-        context = "\n\n".join(results['documents'][0])
+download_json()
 
-        message = self.client.messages.create(
-            model="claude-3-opus-20240229",
-            max_tokens=1000,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""Here is some relevant context:
-                    
-{context}
+# Load the JSON data from the file
+with open("combined.json", "r", encoding="utf-8") as f:
+    json_data = json.load(f)
 
-Based on the context above, please answer this question: {user_question}
 
-If the context doesn't contain enough information to answer the question fully, 
-please say so and answer with what you know from the context only."""
-                }
-            ]
-        )
+# Create or get the collection from Chroma
+collection = client.get_or_create_collection(name="my_collection")
 
-        response_content = message.content
-        text_response = response_content[0].text if hasattr(response_content[0], 'text') else response_content
-        return text_response
-
-# Usage
-rag = RAGWithClaude(
-    api_key="",
-    chroma_path=r"C:\Users\Ryder\Documents\GitHub\testActions\something"
+# Create the dispatcher for concurrency control
+dispatcher = SemaphoreDispatcher(
+    max_session_permit=10,  # Maximum concurrent tasks
 )
 
-response = rag.query("What is the most recent article you have access to?")
-print("\nClaude's Response:")
-print(response)
+async def main(json_data):
+    run_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+
+    # Dispatcher to control the number of concurrent tasks for web crawling
+    dispatcher2 = SemaphoreDispatcher(
+        semaphore_count=5,
+    )
+
+    documents = []  # Initialize an empty list for documents
+    ids = []  # Initialize an empty list for IDs
+
+    # Fetch the markdown content for all URLs
+    async with AsyncWebCrawler() as crawler:
+        results = await crawler.arun_many(
+            json_data,
+            config=run_config,
+            dispatcher=dispatcher2
+        )
+
+    # Process each result in the list
+    for res in results:
+        if res.success:
+            # Assuming res.markdown contains the crawled document content
+            documents.append(res.markdown)
+            # Assuming res.urls contain the URL, which you want to use as the ID
+            ids.append(res.url)
+        else:
+            print("Failed:", res.url, "-", res.error_message)
+
+    # Upsert documents into the Chroma collection
+    collection.upsert(
+        documents=documents,
+        ids=ids
+    )
+
+def move_to_scraped(json_data):
+    scraped_file = "scraped_links.json"
+    combined_file = "combined.json"
+
+    # Load existing scraped links
+    scraped_urls = set()
+    if os.path.exists(scraped_file):
+        with open(scraped_file, "r", encoding="utf-8") as file:
+            try:
+                scraped_urls = set(json.load(file))
+            except json.JSONDecodeError:
+                scraped_urls = set()
+
+    # Convert json_data to a set and merge
+    new_scraped_urls = scraped_urls.union(set(json_data))
+
+    # Save updated scraped links
+    with open(scraped_file, "w", encoding="utf-8") as file:
+        json.dump(list(new_scraped_urls), file, indent=4)
+
+    # Empty combined.json
+    with open(combined_file, "w", encoding="utf-8") as file:
+        json.dump([], file, indent=4)
+
+if __name__ == "__main__":
+    asyncio.run(main(json_data))
+    move_to_scraped(json_data)

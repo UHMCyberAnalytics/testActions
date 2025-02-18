@@ -7,22 +7,15 @@ class RAGWithClaude:
         self.chroma_client = chromadb.PersistentClient(path=chroma_path)
         self.collection = self.chroma_client.get_or_create_collection(name="my_collection")
 
-    def query(self, user_question, n_results=3):
+    def query(self, user_question, n_results=5):
+        # Query Chroma with valid include parameters
         results = self.collection.query(
             query_texts=[user_question],
-            n_results=n_results
+            n_results=n_results,
+            include=['documents', 'metadatas']
         )
 
         context = "\n\n".join(results['documents'][0])
-
-        prompt = f"""Here is some relevant context:
-        
-{context}
-
-Based on the context above, please answer this question: {user_question}
-
-If the context doesn't contain enough information to answer the question fully, 
-please say so and answer with what you know from the context only."""
 
         message = self.client.messages.create(
             model="claude-3-opus-20240229",
@@ -30,19 +23,28 @@ please say so and answer with what you know from the context only."""
             messages=[
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": f"""Here is some relevant context:
+                    
+{context}
+
+Based on the context above, please answer this question: {user_question}
+
+If the context doesn't contain enough information to answer the question fully, 
+please say so and answer with what you know from the context only."""
                 }
             ]
         )
 
-        return message.content
+        response_content = message.content
+        text_response = response_content[0].text if hasattr(response_content[0], 'text') else response_content
+        return text_response
 
 # Usage
 rag = RAGWithClaude(
-    api_key="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",
+    api_key="",
     chroma_path=r"C:\Users\Ryder\Documents\GitHub\testActions\something"
 )
 
-response = rag.query("What is the most recent articles you were trained on? What are their links", n_results=5)  # Get 5 documents
+response = rag.query("What is the most recent article you have access to?")
 print("\nClaude's Response:")
 print(response)
